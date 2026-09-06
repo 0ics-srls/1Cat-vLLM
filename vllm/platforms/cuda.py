@@ -341,6 +341,15 @@ class CudaPlatformBase(Platform):
         device_capability = cls.get_device_capability()
         assert device_capability is not None
 
+        # volta-ada: the engine forces FLASH_ATTN_V100 from device 0; a worker on a non-Volta
+        # device (the 4090 rank of a mixed pipeline) must pick its own backend instead
+        if (
+            selected_backend == AttentionBackendEnum.FLASH_ATTN_V100
+            and (device_capability.major, device_capability.minor) != (7, 0)
+        ):
+            logger.info("volta-ada: device %s is not SM70, ignoring forced FLASH_ATTN_V100", device_capability)
+            selected_backend = None
+
         # First try checking just the selected backend, if there is one.
         if selected_backend is not None:
             try:
