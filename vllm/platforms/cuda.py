@@ -178,6 +178,17 @@ def with_nvml_context(fn: Callable[_P, _R]) -> Callable[_P, _R]:
     return wrapper
 
 
+
+def _current_device_or_zero() -> int:
+    # volta-ada: index of the CUDA device selected by THIS process (0 if CUDA is not initialised)
+    try:
+        if torch.cuda.is_initialized():
+            return int(torch.cuda.current_device())
+    except Exception:
+        pass
+    return 0
+
+
 class CudaPlatformBase(Platform):
     _enum = PlatformEnum.CUDA
     device_name: str = "cuda"
@@ -639,9 +650,16 @@ class CudaPlatformBase(Platform):
 # the major benefit of using NVML is that it will not initialize CUDA
 class NvmlCudaPlatform(CudaPlatformBase):
     @classmethod
+    def get_device_capability(cls, device_id: int = 0) -> DeviceCapability | None:
+        # volta-ada: with mixed GPUs each PP worker must see ITS device, not device 0
+        if device_id == 0:
+            device_id = _current_device_or_zero()
+        return cls._get_device_capability_cached(device_id)
+
+    @classmethod
     @cache
     @with_nvml_context
-    def get_device_capability(cls, device_id: int = 0) -> DeviceCapability | None:
+    def _get_device_capability_cached(cls, device_id: int = 0) -> DeviceCapability | None:
         try:
             physical_device_id = cls.device_id_to_physical_device_id(device_id)
             handle = pynvml.nvmlDeviceGetHandleByIndex(physical_device_id)
@@ -878,6 +896,8 @@ class NonNvmlCudaPlatform(CudaPlatformBase):
     @classmethod
     @cache
     def get_device_capability(cls, device_id: int = 0) -> DeviceCapability:
+        if device_id == 0:
+            device_id = _current_device_or_zero()  # volta-ada
         major, minor = torch.cuda.get_device_capability(device_id)
         return DeviceCapability(major=major, minor=minor)
 

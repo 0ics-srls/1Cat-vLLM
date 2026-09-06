@@ -50,6 +50,9 @@ def quant_backend() -> SM70QuantBackend:
 
 
 def use_turbomind(default_enabled: bool) -> bool:
+    # volta-ada: on a non-Volta device (the 4090 rank of a mixed pipeline) never take the TurboMind paths
+    if not is_exact_sm70_cuda_platform():
+        return False
     return envs.use_sm70_turbomind(default_enabled)
 
 
