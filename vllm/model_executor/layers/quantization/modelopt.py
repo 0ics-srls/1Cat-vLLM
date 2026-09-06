@@ -474,6 +474,7 @@ class ModelOptFp8LinearMethod(LinearMethodBase):
         layer.logical_widths = output_partition_sizes
         layer.input_size_per_partition = input_size_per_partition
         layer.output_size_per_partition = output_size_per_partition
+        layer.orig_dtype = params_dtype  # volta-ada: needed by the Marlin FP8 path on non-SM70 ranks
         weight_dtype = (
             torch.float8_e4m3fn
             if self.quant_config.is_checkpoint_fp8_serialized
