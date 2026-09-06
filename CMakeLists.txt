@@ -363,7 +363,7 @@ if(VLLM_GPU_LANG STREQUAL "CUDA")
     CUDA_ARCHS "${CUDA_ARCHS}")
 
   set(VLLM_SM70_TURBOMIND_INCLUDE_DIRS "")
-  cuda_archs_loose_intersection(SM70_TURBOMIND_ARCHS "7.0" "${CUDA_ARCHS}")
+  cuda_archs_loose_intersection(SM70_TURBOMIND_ARCHS "7.0;8.9" "${CUDA_ARCHS}")
   if (SM70_TURBOMIND_ARCHS)
     set(VLLM_SM70_TURBOMIND_ROOT
         "${CMAKE_CURRENT_LIST_DIR}/csrc/sm70_turbomind")
@@ -449,7 +449,7 @@ if(VLLM_GPU_LANG STREQUAL "CUDA")
   endif()
   # marlin arches for other files
   cuda_archs_loose_intersection(MARLIN_OTHER_ARCHS "7.5;8.0+PTX" "${CUDA_ARCHS}")
-  cuda_archs_loose_intersection(MARLIN_SM70_ARCHS "7.0" "${CUDA_ARCHS}")
+  cuda_archs_loose_intersection(MARLIN_SM70_ARCHS "7.0;8.9" "${CUDA_ARCHS}")
 
   if (MARLIN_SM70_ARCHS AND NOT MARLIN_OTHER_ARCHS)
     set(MARLIN_SM70_SRCS
@@ -1279,7 +1279,7 @@ if(VLLM_GPU_LANG STREQUAL "CUDA")
   cuda_archs_loose_intersection(MARLIN_MOE_FP8_ARCHS "8.9;12.0;12.1" "${CUDA_ARCHS}")
   # moe marlin arches for other files
   cuda_archs_loose_intersection(MARLIN_MOE_OTHER_ARCHS "7.5;8.0+PTX" "${CUDA_ARCHS}")
-  cuda_archs_loose_intersection(MARLIN_MOE_SM70_ARCHS "7.0" "${CUDA_ARCHS}")
+  cuda_archs_loose_intersection(MARLIN_MOE_SM70_ARCHS "7.0;8.9" "${CUDA_ARCHS}")
   if (MARLIN_MOE_SM70_ARCHS AND NOT MARLIN_MOE_OTHER_ARCHS)
     set(MARLIN_MOE_SM70_SRC
       "csrc/moe/marlin_moe_wna16/sm70_marlin_moe_dispatch.cu"
@@ -1534,7 +1534,7 @@ if (VLLM_GPU_LANG STREQUAL "CUDA")
       include(cmake/external_projects/vllm_flash_attn.cmake)
     else()
       cuda_archs_loose_intersection(VLLM_FLASH_ATTN_SM70_ARCHS
-        "7.0" "${CUDA_ARCHS}")
+        "7.0;8.9" "${CUDA_ARCHS}")
       if(VLLM_FLASH_ATTN_SM70_ARCHS)
         set(VLLM_FLASH_ATTN_SM70 ON)
         include(cmake/external_projects/vllm_flash_attn.cmake)
