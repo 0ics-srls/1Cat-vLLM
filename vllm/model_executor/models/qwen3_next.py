@@ -875,6 +875,37 @@ class Qwen3NextModel(nn.Module, EagleModelMixin):
     def embed_input_ids(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self.embed_tokens(input_ids)
 
+    # ---- volta-ada: stati ausiliari (Eagle3/DFlash) attraverso i ranghi della pipeline ----
+    @property
+    def aux_hidden_state_layers(self) -> tuple[int, ...]:
+        return getattr(self, "_aux_hidden_state_layers", ())
+
+    @aux_hidden_state_layers.setter
+    def aux_hidden_state_layers(self, layers: tuple[int, ...]) -> None:
+        self._aux_hidden_state_layers = tuple(layers)
+        if hasattr(self, "start_layer"):
+            self._refresh_intermediate_tensor_keys()
+
+    def _pp_aux_layers_before_this_rank(self) -> list[int]:
+        """Aux indices (numbered after each layer, 0 = embeddings) collected by earlier ranks."""
+        if self.is_pp_first_rank:
+            return []
+        return [i for i in sorted(self.aux_hidden_state_layers) if i <= self.start_layer]
+
+    def _pp_aux_layers_on_this_rank(self) -> list[int]:
+        return [
+            i for i in sorted(self.aux_hidden_state_layers)
+            if (i == 0 and self.is_pp_first_rank) or self.start_layer < i <= self.end_layer
+        ]
+
+    def _refresh_intermediate_tensor_keys(self) -> None:
+        keys = ["hidden_states", "residual"] + [
+            f"aux_hidden_{i}" for i in self._pp_aux_layers_before_this_rank()
+        ]
+        self.make_empty_intermediate_tensors = make_empty_intermediate_tensors_factory(
+            keys, self.config.hidden_size
+        )
+
     def forward(
         self,
         input_ids: torch.Tensor | None,
@@ -893,7 +924,14 @@ class Qwen3NextModel(nn.Module, EagleModelMixin):
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
 
-        aux_hidden_states = self._maybe_add_hidden_state([], 0, hidden_states, residual)
+        aux_hidden_states: list[torch.Tensor] = []
+        if self.is_pp_first_rank:
+            aux_hidden_states = self._maybe_add_hidden_state(
+                aux_hidden_states, 0, hidden_states, residual
+            )
+        else:
+            for i in self._pp_aux_layers_before_this_rank():
+                aux_hidden_states.append(intermediate_tensors[f"aux_hidden_{i}"])
         trace_enabled = _sm70_profile_trace_enabled()
         if trace_enabled:
             _sm70_profile_trace(
@@ -933,9 +971,11 @@ class Qwen3NextModel(nn.Module, EagleModelMixin):
             )
 
         if not self.is_pp_last_rank:
-            return IntermediateTensors(
-                {"hidden_states": hidden_states, "residual": residual}
-            )
+            out = {"hidden_states": hidden_states, "residual": residual}
+            aux_ids = self._pp_aux_layers_before_this_rank() + self._pp_aux_layers_on_this_rank()
+            for i, t in zip(aux_ids, aux_hidden_states):
+                out[f"aux_hidden_{i}"] = t
+            return IntermediateTensors(out)
         hidden_states, _ = self.norm(hidden_states, residual)
         if aux_hidden_states:
             return hidden_states, aux_hidden_states
@@ -1151,7 +1191,7 @@ class Qwen3NextForCausalLM(
         )
         self.logits_processor = LogitsProcessor(config.vocab_size)
         self.make_empty_intermediate_tensors = (
-            self.model.make_empty_intermediate_tensors
+            lambda *a, **kw: self.model.make_empty_intermediate_tensors(*a, **kw)  # volta-ada: factory dinamica
         )
 
         # Set MoE hyperparameters

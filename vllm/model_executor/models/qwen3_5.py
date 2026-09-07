@@ -900,7 +900,7 @@ class Qwen3_5ForCausalLMBase(
 
         self.logits_processor = LogitsProcessor(config.vocab_size)
         self.make_empty_intermediate_tensors = (
-            self.model.make_empty_intermediate_tensors
+            lambda *a, **kw: self.model.make_empty_intermediate_tensors(*a, **kw)  # volta-ada: factory dinamica
         )
 
     def embed_input_ids(self, input_ids: torch.Tensor) -> torch.Tensor:
@@ -1043,7 +1043,7 @@ class Qwen3_5ForConditionalGeneration(Qwen3VLForConditionalGeneration, IsHybrid)
             )
 
         self.make_empty_intermediate_tensors = (
-            self.language_model.make_empty_intermediate_tensors
+            lambda *a, **kw: self.language_model.make_empty_intermediate_tensors(*a, **kw)  # volta-ada: factory dinamica
         )
 
     def embed_input_ids(
@@ -1271,7 +1271,7 @@ class Qwen3_5MoeForConditionalGeneration(
             )
 
         self.make_empty_intermediate_tensors = (
-            self.language_model.make_empty_intermediate_tensors
+            lambda *a, **kw: self.language_model.make_empty_intermediate_tensors(*a, **kw)  # volta-ada: factory dinamica
         )
 
         # set MoE hyperparameters
