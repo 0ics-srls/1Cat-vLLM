@@ -1001,7 +1001,8 @@ at::Tensor flash_attention_qk_scores(const at::Tensor& q, const at::Tensor& k,
               "num_attention_heads must be divisible by num_kv_heads");
 
   auto props = at::cuda::getCurrentDeviceProperties();
-  bool sm70 = props->major == 7 && props->minor == 0;
+  // volta-ada: the kernels are also compiled for sm_89 (mixed V100 + 4090 pipeline); let Ada through
+  bool sm70 = (props->major == 7 && props->minor == 0) || (props->major == 8 && props->minor == 9);
   TORCH_CHECK(sm70, "Kernel supports only Volta GPUs.");
 
   auto scores = torch::full({B, H, M, N}, -1e30f,
@@ -1081,7 +1082,8 @@ std::vector<at::Tensor> flash_attention_forward(
 
   auto stream = at::cuda::getCurrentCUDAStream().stream();
   auto props = at::cuda::getCurrentDeviceProperties();
-  bool sm70 = props->major == 7 && props->minor == 0;
+  // volta-ada: the kernels are also compiled for sm_89 (mixed V100 + 4090 pipeline); let Ada through
+  bool sm70 = (props->major == 7 && props->minor == 0) || (props->major == 8 && props->minor == 9);
   TORCH_CHECK(sm70, "Kernel supports only Volta GPUs.");
   const char* scalar_pv_env = std::getenv("VLLM_FLASH_V100_PREFILL_SCALAR_PV");
   const bool scalar_pv = scalar_pv_env != nullptr && scalar_pv_env[0] != '\0' &&

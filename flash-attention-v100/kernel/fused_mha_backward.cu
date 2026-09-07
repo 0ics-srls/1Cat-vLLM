@@ -1302,7 +1302,8 @@ std::vector<at::Tensor> flash_attention_backward(
 
   auto stream = at::cuda::getCurrentCUDAStream().stream();
   auto props = at::cuda::getCurrentDeviceProperties();
-  bool sm70 = props->major == 7 && props->minor == 0;
+  // volta-ada: the kernels are also compiled for sm_89 (mixed V100 + 4090 pipeline); let Ada through
+  bool sm70 = (props->major == 7 && props->minor == 0) || (props->major == 8 && props->minor == 9);
   TORCH_CHECK(sm70, "Kernel supports only Volta GPUs.");
 
   switch (D) {

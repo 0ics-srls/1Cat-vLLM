@@ -3444,7 +3444,8 @@ at::Tensor flash_attention_prefill_paged_splitkv(
 
   auto stream = at::cuda::getCurrentCUDAStream().stream();
   auto props = at::cuda::getCurrentDeviceProperties();
-  bool sm70 = props->major == 7 && props->minor == 0;
+  // volta-ada: the kernels are also compiled for sm_89 (mixed V100 + 4090 pipeline); let Ada through
+  bool sm70 = (props->major == 7 && props->minor == 0) || (props->major == 8 && props->minor == 9);
   TORCH_CHECK(sm70, "Kernel supports only Volta GPUs.");
 
   const bool fp16_kv = kv_dtype_code == flash_v100::KV_CACHE_DTYPE_FP16;
@@ -3609,7 +3610,8 @@ at::Tensor flash_attention_prefill_paged(
 
   auto stream = at::cuda::getCurrentCUDAStream().stream();
   auto props = at::cuda::getCurrentDeviceProperties();
-  bool sm70 = props->major == 7 && props->minor == 0;
+  // volta-ada: the kernels are also compiled for sm_89 (mixed V100 + 4090 pipeline); let Ada through
+  bool sm70 = (props->major == 7 && props->minor == 0) || (props->major == 8 && props->minor == 9);
   TORCH_CHECK(sm70, "Kernel supports only Volta GPUs.");
 
 #define LAUNCH_PAGED_TYPED(HDIM, KV_DTYPE_CODE)                           \
@@ -3967,7 +3969,8 @@ at::Tensor flash_attention_prefill_paged_bfla(
 
   auto stream = at::cuda::getCurrentCUDAStream().stream();
   auto props = at::cuda::getCurrentDeviceProperties();
-  bool sm70 = props->major == 7 && props->minor == 0;
+  // volta-ada: the kernels are also compiled for sm_89 (mixed V100 + 4090 pipeline); let Ada through
+  bool sm70 = (props->major == 7 && props->minor == 0) || (props->major == 8 && props->minor == 9);
   TORCH_CHECK(sm70, "Kernel supports only Volta GPUs.");
 
   launcher_flash_attention_forward_paged<256, flash_v100::KV_CACHE_DTYPE_FP16>(
@@ -4041,7 +4044,8 @@ at::Tensor flash_attention_decode_paged_wmma(
 
   auto stream = at::cuda::getCurrentCUDAStream().stream();
   auto props = at::cuda::getCurrentDeviceProperties();
-  bool sm70 = props->major == 7 && props->minor == 0;
+  // volta-ada: the kernels are also compiled for sm_89 (mixed V100 + 4090 pipeline); let Ada through
+  bool sm70 = (props->major == 7 && props->minor == 0) || (props->major == 8 && props->minor == 9);
   TORCH_CHECK(sm70, "Kernel supports only Volta GPUs.");
 
 #define LAUNCH_DECODE_WMMA_TYPED(HDIM, KV_DTYPE_CODE)                     \
