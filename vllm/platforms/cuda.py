@@ -349,6 +349,10 @@ class CudaPlatformBase(Platform):
         ):
             logger.info("volta-ada: device %s is not SM70, ignoring forced FLASH_ATTN_V100", device_capability)
             selected_backend = None
+            override = os.environ.get("VOLTA_ADA_NON_SM70_ATTENTION_BACKEND")
+            if override:
+                selected_backend = AttentionBackendEnum[override.upper()]
+                logger.info("volta-ada: non-SM70 rank uses forced backend %s", selected_backend)
 
         # First try checking just the selected backend, if there is one.
         if selected_backend is not None:
