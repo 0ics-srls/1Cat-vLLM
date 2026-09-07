@@ -2449,8 +2449,9 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         self.compare_sm70_fused_sigmoid_mixed_qkv = (
             envs.VLLM_SM70_FUSED_SIGMOID_MIXED_QKV_COMPARE
         )
-        self.enable_flashqla_decode = envs.VLLM_SM70_GDN_DECODE_FLASHQLA
-        self.force_sm70_qwen_gdn_full_forward = envs.VLLM_SM70_QWEN_GDN_FULL_FORWARD
+        # volta-ada: the SM70 GDN decode routes are Volta kernels; gate them on the CURRENT device being exactly 7.0
+        self.enable_flashqla_decode = bool(envs.VLLM_SM70_GDN_DECODE_FLASHQLA and current_platform.is_device_capability(70))
+        self.force_sm70_qwen_gdn_full_forward = bool(envs.VLLM_SM70_QWEN_GDN_FULL_FORWARD and current_platform.is_device_capability(70))
         num_speculative_tokens = _sm70_qwen_gdn_num_speculative_tokens(vllm_config)
         block_003_deep_mtp = _sm70_qwen_gdn_block_003_spec_for_deep_native_mtp(
             vllm_config
@@ -2505,7 +2506,7 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
             logger.info_once(
                 "SM70 Qwen GDN 0.0.3-style spec recurrent-core route armed."
             )
-        self.enable_sm70_legacy_prefill_prep = envs.VLLM_SM70_GDN_LEGACY_PREFILL_PREP
+        self.enable_sm70_legacy_prefill_prep = bool(envs.VLLM_SM70_GDN_LEGACY_PREFILL_PREP and current_platform.is_device_capability(70))
         if current_platform.is_device_capability(70) and (
             envs.VLLM_SM70_GDN_KKT_SCHEDULE
             or envs.VLLM_SM70_GDN_DELTA_H_SCHEDULE
