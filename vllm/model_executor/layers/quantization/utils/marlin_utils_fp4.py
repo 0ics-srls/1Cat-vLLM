@@ -33,9 +33,20 @@ def is_fp4_marlin_supported():
 
 
 def _sm70_marlin_layout() -> bool:
-    """True only on the Volta rank: the SM70 Marlin kernel wants logical N-contiguous
-    scales; every other CUDA arch runs the upstream kernel and wants permuted scales."""
-    return current_platform.is_cuda() and current_platform.is_device_capability((7, 0))
+    """True when the COMPILED Marlin is the SM70 one, which wants logical N-contiguous
+    scales; the upstream kernel wants permuted scales.
+
+    The choice must follow the kernel, not the device: when vLLM is built with 7.0 in
+    CUDA_ARCHS the SM70 sources replace the generic ones for every arch, so the Ada rank
+    of a V100+Ada pipeline also runs the SM70 kernel. `sm70_marlin_available()` is set by
+    ENABLE_SM70_MARLIN at build time and does not look at the current device."""
+    if not current_platform.is_cuda():
+        return False
+    try:
+        return bool(ops.sm70_marlin_available())
+    except Exception:
+        # build senza quella funzione: si ricade sul criterio per device
+        return current_platform.is_device_capability((7, 0))
 
 
 def _marlin_scales_for_arch(s, size_k, size_n, group_size, is_a_8bit=False):

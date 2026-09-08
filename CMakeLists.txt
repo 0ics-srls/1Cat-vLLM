@@ -451,6 +451,16 @@ if(VLLM_GPU_LANG STREQUAL "CUDA")
   cuda_archs_loose_intersection(MARLIN_OTHER_ARCHS "7.5;8.0+PTX" "${CUDA_ARCHS}")
   cuda_archs_loose_intersection(MARLIN_SM70_ARCHS "7.0;8.9" "${CUDA_ARCHS}")
 
+  # volta-ada: i sorgenti SM70 registrano LE STESSE operazioni di quelli generici
+  # (m.impl("gptq_marlin_repack", ...)): non si sommano, si sostituiscono. Se si
+  # compila anche per Volta il set SM70 copre tutte le architetture richieste e
+  # quello generico va escluso, altrimenti il link fallisce per simboli duplicati.
+  string(FIND "${CUDA_ARCHS}" "7.0" VOLTA_IN_ARCHS)
+  if (NOT VOLTA_IN_ARCHS EQUAL -1)
+    set(MARLIN_OTHER_ARCHS "")
+    message(STATUS "volta-ada: Marlin SM70 al posto del generico per ${MARLIN_SM70_ARCHS}")
+  endif()
+
   if (MARLIN_SM70_ARCHS AND NOT MARLIN_OTHER_ARCHS)
     set(MARLIN_SM70_SRCS
        "csrc/quantization/marlin/sm70_marlin_dispatch.cu"
@@ -1280,6 +1290,15 @@ if(VLLM_GPU_LANG STREQUAL "CUDA")
   # moe marlin arches for other files
   cuda_archs_loose_intersection(MARLIN_MOE_OTHER_ARCHS "7.5;8.0+PTX" "${CUDA_ARCHS}")
   cuda_archs_loose_intersection(MARLIN_MOE_SM70_ARCHS "7.0;8.9" "${CUDA_ARCHS}")
+
+  # volta-ada: identico al caso denso, ma per i kernel Marlin degli esperti.
+  # E' questo il blocco che serve ai MoE NVFP4 (Qwen3-Next-80B, GLM-4.7-Flash):
+  # senza, il rango V100 muore in prepare_nvfp4_moe_layer_for_marlin.
+  string(FIND "${CUDA_ARCHS}" "7.0" VOLTA_IN_ARCHS_MOE)
+  if (NOT VOLTA_IN_ARCHS_MOE EQUAL -1)
+    set(MARLIN_MOE_OTHER_ARCHS "")
+    message(STATUS "volta-ada: Marlin MoE SM70 al posto del generico per ${MARLIN_MOE_SM70_ARCHS}")
+  endif()
   if (MARLIN_MOE_SM70_ARCHS AND NOT MARLIN_MOE_OTHER_ARCHS)
     set(MARLIN_MOE_SM70_SRC
       "csrc/moe/marlin_moe_wna16/sm70_marlin_moe_dispatch.cu"
