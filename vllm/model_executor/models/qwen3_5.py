@@ -222,6 +222,7 @@ def _uses_split_gdn_input_projections(
     quant_config: QuantizationConfig | None,
 ) -> bool:
     """Return True when qkv/z and b/a use different precisions."""
+    return True  # bisect: proiezioni divise forzate
     ignored_modules: list[str] = []
 
     def add_ignored_modules(value: object) -> None:

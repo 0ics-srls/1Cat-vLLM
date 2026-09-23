@@ -59,6 +59,10 @@ _SUPPORTED_CONTRACTS: Final = {
     (2048, 512, 256, 8),  # Qwen3.6-35B-A3B
     (2560, 640, 512, 10),  # Qwen3.8-Flash-Next
     (4096, 2048, 288, 8),  # GLM-5.3-Flash
+    # volta-ada: forma da verificare — Qwen3-Next-80B-A3B (nvidia NVFP4).
+    # Il controllo originale e' prudenziale: se i numeri fossero sbagliati
+    # le domande di controllo darebbero risposte incoerenti.
+    (2048, 512, 512, 10),
 }
 _SUPPORTED_TP_SIZES: Final = (1, 2, 4)
 _GRAPH_SAFE_MAX_TOKENS: Final = 18
