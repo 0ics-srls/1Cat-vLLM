@@ -34,6 +34,7 @@ from vllm.transformers_utils.configs.qwen3_5_moe import Qwen3_5MoeTextConfig
 from .interfaces import (
     MultiModalEmbeddings,
     SupportsMultiModal,
+    SupportsPP,
     _require_is_multimodal,
 )
 from .utils import (
@@ -196,7 +197,9 @@ class Qwen3_5MultiTokenPredictor(nn.Module):
         inputs_embeds: torch.Tensor | None = None,
         spec_step_idx: int = 0,
     ) -> torch.Tensor:
-        if get_pp_group().is_first_rank:
+        # Branch on the inputs, not the rank: the drafter is built entirely on
+        # the last PP stage, where `is_first_rank` is False (upstream #46994).
+        if intermediate_tensors is None:
             if inputs_embeds is None:
                 inputs_embeds = self.embed_input_ids(input_ids)
             assert hidden_states.shape[-1] == inputs_embeds.shape[-1]
@@ -206,7 +209,6 @@ class Qwen3_5MultiTokenPredictor(nn.Module):
             hidden_states = self.fc(hidden_states)
             residual = None
         else:
-            assert intermediate_tensors is not None
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
 
@@ -434,7 +436,7 @@ class Qwen3_5MultiTokenPredictor(nn.Module):
         "hidden_states": 0,
     }
 )
-class Qwen3_5MTP(nn.Module, SupportsMultiModal):
+class Qwen3_5MTP(nn.Module, SupportsMultiModal, SupportsPP):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -505,10 +507,21 @@ class Qwen3_5MTP(nn.Module, SupportsMultiModal):
 
         super().__init__()
         self.config = config
+        # Under pipeline parallel the target's embed_tokens live on the first
+        # rank while the drafter is built on the last one, and the proposer only
+        # shares embeddings at pp world_size 1: the draft needs its own copy
+        # (loaded from the checkpoint). lm_head stays shared: the target's is
+        # on the last rank too (volta-ada, MTP under PP).
+        share_embed = (
+            self.share_target_io_weights and get_pp_group().world_size == 1
+        )
         self.model = Qwen3_5MultiTokenPredictor(
             vllm_config=mtp_vllm_config,
             prefix=maybe_prefix(prefix, "mtp"),
-            share_target_embed_tokens=self.share_target_io_weights,
+            share_target_embed_tokens=share_embed,
+        )
+        self.make_empty_intermediate_tensors = (
+            self.model.make_empty_intermediate_tensors
         )
 
         if get_pp_group().is_last_rank:

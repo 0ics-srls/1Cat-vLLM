@@ -10119,7 +10119,13 @@ class GPUModelRunner(
                     payload["valid_sampled_tokens_count"] = valid_sampled_tokens_count
                 _maybe_dump_sm70_mtp_step("draft_input", payload)
 
-            if self.supports_mm_inputs and self.drafter.supports_mm_inputs:
+            # The encoder runner exists only on the first PP rank, so later
+            # ranks have no cached embeddings to gather (upstream #46994).
+            if (
+                self.supports_mm_inputs
+                and self.drafter.supports_mm_inputs
+                and get_pp_group().is_first_rank
+            ):
                 mm_embed_inputs = self._gather_mm_embeddings(
                     scheduler_output,
                     shift_computed_tokens=1,
