@@ -7739,7 +7739,7 @@ class GPUModelRunner(
         if self.device.type != "cuda":
             self._trace_greedy_token_fastpath("non_cuda")
             return False
-        if torch.cuda.get_device_capability(self.device) != (7, 0):
+        if not self._sm70_greedy_fastpath_group_enabled():
             self._trace_greedy_token_fastpath("non_sm70")
             return False
         if not hasattr(self.model, "get_top_tokens"):
@@ -7852,6 +7852,30 @@ class GPUModelRunner(
                 continue
             return False
         return True
+
+    def _sm70_greedy_fastpath_group_enabled(self) -> bool:
+        """volta-ada: la scorciatoia greedy fa collettive diverse dal percorso normale, quindi la scelta
+        deve essere identica su tutti i ranghi TP. Si accende se ALMENO un rango e' SM70 (la V100), e
+        allora la usano tutti: l'argmax locale + all_gather delle coppie gira su qualsiasi GPU."""
+        cached = getattr(self, "_sm70_greedy_fastpath_group", None)
+        if cached is not None:
+            return cached
+        local = torch.cuda.get_device_capability(self.device) == (7, 0)
+        from vllm.distributed.parallel_state import get_tp_group
+        tp = get_tp_group()
+        if tp.world_size > 1:
+            flag = torch.tensor([1 if local else 0], device=self.device, dtype=torch.int32)
+            gathered = tp.all_gather(flag, dim=0)
+            enabled = bool(int(gathered.max().item()) == 1)
+            if enabled and not local:
+                logger.info_once(
+                    "Greedy token fastpath enabled on this non-SM70 rank because "
+                    "an SM70 rank is in the TP group (collectives must match)."
+                )
+        else:
+            enabled = local
+        self._sm70_greedy_fastpath_group = enabled
+        return enabled
 
     def _trace_greedy_token_fastpath(self, reason: str) -> None:
         if not self.sm70_greedy_token_fastpath_trace:
