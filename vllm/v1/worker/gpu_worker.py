@@ -382,6 +382,23 @@ class Worker(WorkerBase):
                 # tipo originale (vedi Platform._align_hybrid_block_size)
                 os.environ["VOLTA_ADA_KV_LAYOUT_DTYPE"] = self.cache_config.cache_dtype
                 self.cache_config.cache_dtype = sm70_kv_dtype
+        # volta-ada: backend di attenzione per rango (VOLTA_ADA_NON_SM70_ATTN_BACKEND=FLASHINFER): il rango SM70 tiene
+        # il backend della riga di comando, gli altri (Ada) ne usano uno che legge la cache fp8 dentro il kernel.
+        non_sm70_backend = os.environ.get("VOLTA_ADA_NON_SM70_ATTN_BACKEND")
+        if non_sm70_backend and self.device_config.device_type == "cuda":
+            try:
+                cap = torch.cuda.get_device_capability(self.local_rank)
+            except Exception:
+                cap = None
+            if cap is not None and cap != (7, 0):
+                from vllm.v1.attention.backend import AttentionBackendEnum
+                backend_enum = AttentionBackendEnum[non_sm70_backend]
+                logger.info(
+                    "volta-ada: rank %d is SM%d%d, attention backend %s -> %s (SM70 ranks keep %s)",
+                    self.rank, cap[0], cap[1], self.vllm_config.attention_config.backend, backend_enum,
+                    self.vllm_config.attention_config.backend,
+                )
+                self.vllm_config.attention_config.backend = backend_enum
         if self.device_config.device_type == "cuda":
             # This env var set by Ray causes exceptions with graph building.
             os.environ.pop("NCCL_ASYNC_ERROR_HANDLING", None)
