@@ -391,7 +391,7 @@ class Worker(WorkerBase):
             except Exception:
                 cap = None
             if cap is not None and cap != (7, 0):
-                from vllm.v1.attention.backend import AttentionBackendEnum
+                from vllm.v1.attention.backends.registry import AttentionBackendEnum
                 backend_enum = AttentionBackendEnum[non_sm70_backend]
                 logger.info(
                     "volta-ada: rank %d is SM%d%d, attention backend %s -> %s (SM70 ranks keep %s)",
