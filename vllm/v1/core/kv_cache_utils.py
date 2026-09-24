@@ -2837,7 +2837,7 @@ def get_kv_cache_configs(
                 )
                 assert same_shape, (
                     "The KV cache specs for the same layer are different "
-                    "across workers. This is not supported yet."
+                    f"across workers. This is not supported yet. {layer_name}: {a!r} vs {b!r}"
                 )
                 logger.info_once(
                     "volta-ada: KV cache dtype differs across workers for %s (%s vs %s); "

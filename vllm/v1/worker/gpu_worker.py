@@ -378,6 +378,9 @@ class Worker(WorkerBase):
                     "volta-ada: rank %d is SM70, KV cache dtype %s -> %s (other ranks keep %s)",
                     self.rank, self.cache_config.cache_dtype, sm70_kv_dtype, self.cache_config.cache_dtype,
                 )
+                # il block_size (token per blocco) deve restare quello degli altri rango: lo si ricava dal
+                # tipo originale (vedi Platform._align_hybrid_block_size)
+                os.environ["VOLTA_ADA_KV_LAYOUT_DTYPE"] = self.cache_config.cache_dtype
                 self.cache_config.cache_dtype = sm70_kv_dtype
         if self.device_config.device_type == "cuda":
             # This env var set by Ray causes exceptions with graph building.

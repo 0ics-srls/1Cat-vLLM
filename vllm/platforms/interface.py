@@ -619,6 +619,25 @@ class Platform:
                 kv_quant_mode=kv_quant_mode,
             ).page_size_bytes
 
+        # volta-ada: cache per rango (VOLTA_ADA_SM70_KV_DTYPE). Il block_size va calcolato con il tipo di cache
+        # ORIGINALE (quello degli altri rango), altrimenti ogni rango avrebbe blocchi di token diversi e le spec
+        # non si fondono. La pagina reale di questo rango resta nel suo tipo (padding Mamba piu' grande).
+        import os as _os
+        layout_dtype_str = _os.environ.get("VOLTA_ADA_KV_LAYOUT_DTYPE")
+        layout_page_size_1_token = attn_page_size_1_token
+        if layout_dtype_str and layout_dtype_str != cache_config.cache_dtype and not model_config.use_mla:
+            layout_page_size_1_token = FullAttentionSpec(
+                block_size=1,
+                num_kv_heads=model_config.get_num_kv_heads(parallel_config),
+                head_size=model_config.get_head_size(),
+                dtype=STR_DTYPE_TO_TORCH_DTYPE[layout_dtype_str],
+                kv_quant_mode=get_kv_quant_mode(layout_dtype_str),
+            ).page_size_bytes
+            logger.info(
+                "volta-ada: block layout from cache dtype %s (page/token %d), this rank stores %s (page/token %d)",
+                layout_dtype_str, layout_page_size_1_token, cache_config.cache_dtype, attn_page_size_1_token,
+            )
+
         # Compute mamba page size
         model_cls, _ = ModelRegistry.resolve_model_cls(
             model_config.architecture,
@@ -663,7 +682,7 @@ class Platform:
             # mamba2 kernels.
             base_chunk_size = mamba_block_size or model_config.get_mamba_chunk_size()
             assert base_chunk_size is not None
-            attn_tokens_per_mamba_state = cdiv(mamba_page_size, attn_page_size_1_token)
+            attn_tokens_per_mamba_state = cdiv(mamba_page_size, layout_page_size_1_token)
             chunk_size = lcm(base_chunk_size, kernel_block_alignment_size)
             attn_block_size = chunk_size * cdiv(attn_tokens_per_mamba_state, chunk_size)
             cache_config.mamba_block_size = attn_block_size
@@ -672,7 +691,7 @@ class Platform:
             # both backend alignment and mamba page size compatibility
             attn_block_size = kernel_block_alignment_size * cdiv(
                 mamba_page_size,
-                kernel_block_alignment_size * attn_page_size_1_token,
+                kernel_block_alignment_size * layout_page_size_1_token,
             )
             indexer_align = cls._get_indexer_block_alignment(vllm_config)
             if indexer_align:
