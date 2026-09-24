@@ -2538,3 +2538,44 @@ def _node_count(pg: ProcessGroup | StatelessProcessGroup) -> int:
                 node_assignment[other_rank] = next_node_id
 
     return next_node_id
+
+
+# --- volta-ada-tp: traccia delle collettive per rango (VLLM_TP_TRACE=1) ---------------------------------
+def _install_tp_trace() -> None:
+    import os as _os
+    import sys as _sys
+    import traceback as _tb
+    if not _os.environ.get("VLLM_TP_TRACE"):
+        return
+    names = [
+        "all_reduce", "all_reduce_sum2", "sm70_awq_mlp_down_tile_all_reduce",
+        "sm70_awq_mlp_down_tile_gemm_reduce", "all_gather", "all_gatherv", "reduce_scatter",
+        "reduce_scatterv", "broadcast", "broadcast_object", "broadcast_object_list", "barrier",
+        "send", "recv",
+    ]
+    counter = {"n": 0}
+
+    def wrap(name, fn):
+        def wrapper(self, *args, **kwargs):
+            counter["n"] += 1
+            shape = "-"
+            for a in args:
+                if isinstance(a, torch.Tensor):
+                    shape = "%s/%s" % (tuple(a.shape), str(a.dtype).replace("torch.", ""))
+                    break
+            st = _tb.extract_stack(limit=6)
+            chain = " < ".join("%s:%d" % (f.filename.split("/")[-1], f.lineno) for f in st[:-1][-4:])
+            _sys.stderr.write("TPTRACE rank=%s grp=%s n=%d %s %s @ %s\n" % (
+                getattr(self, "rank_in_group", "?"), getattr(self, "unique_name", "?"), counter["n"], name, shape, chain))
+            _sys.stderr.flush()
+            return fn(self, *args, **kwargs)
+        wrapper.__name__ = fn.__name__
+        return wrapper
+
+    for name in names:
+        fn = getattr(GroupCoordinator, name, None)
+        if fn is not None:
+            setattr(GroupCoordinator, name, wrap(name, fn))
+
+
+_install_tp_trace()
