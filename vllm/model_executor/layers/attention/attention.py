@@ -194,7 +194,11 @@ def _init_kv_cache_quant(
             unit_scale_compatible = (
                 uses_unit_scale_processing or not has_checkpoint_kv_scheme
             )
-            if not sm70_flash_v100 or not unit_scale_compatible:
+            # volta-ada-tp: in un gruppo misto V100 + 4090 anche il rango Ada deve usare la cache
+            # e5m2 a scala unitaria, altrimenti i due ranghi divergono (o il rango Ada si rifiuta).
+            import os as _os
+            mixed_override = _os.environ.get("VOLTA_ADA_FP8_KV_UNIT_SCALE") == "1"
+            if (not sm70_flash_v100 and not mixed_override) or not unit_scale_compatible:
                 raise ValueError(
                     "fp8_e5m2 kv-cache is not supported with checkpoint KV "
                     "scales outside the SM70 Flash-V100 unit-scale override path."
