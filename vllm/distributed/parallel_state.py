@@ -2555,19 +2555,23 @@ def _install_tp_trace() -> None:
     ]
     counter = {"n": 0}
 
+    @torch.compiler.disable
+    def log_call(self, name, args):
+        counter["n"] += 1
+        shape = "-"
+        for a in args:
+            if isinstance(a, torch.Tensor):
+                shape = "%s/%s" % (tuple(a.shape), str(a.dtype).replace("torch.", ""))
+                break
+        st = _tb.extract_stack(limit=40)
+        chain = " < ".join("%s:%d" % (f.filename.split("/")[-1], f.lineno) for f in st[:-1][-38:])
+        _sys.stderr.write("TPTRACE rank=%s grp=%s n=%d %s %s @ %s\n" % (
+            getattr(self, "rank_in_group", "?"), getattr(self, "unique_name", "?"), counter["n"], name, shape, chain))
+        _sys.stderr.flush()
+
     def wrap(name, fn):
         def wrapper(self, *args, **kwargs):
-            counter["n"] += 1
-            shape = "-"
-            for a in args:
-                if isinstance(a, torch.Tensor):
-                    shape = "%s/%s" % (tuple(a.shape), str(a.dtype).replace("torch.", ""))
-                    break
-            st = _tb.extract_stack(limit=40)
-            chain = " < ".join("%s:%d" % (f.filename.split("/")[-1], f.lineno) for f in st[:-1][-38:])
-            _sys.stderr.write("TPTRACE rank=%s grp=%s n=%d %s %s @ %s\n" % (
-                getattr(self, "rank_in_group", "?"), getattr(self, "unique_name", "?"), counter["n"], name, shape, chain))
-            _sys.stderr.flush()
+            log_call(self, name, args)
             return fn(self, *args, **kwargs)
         wrapper.__name__ = fn.__name__
         return wrapper
