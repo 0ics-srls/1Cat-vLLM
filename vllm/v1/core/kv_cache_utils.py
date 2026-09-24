@@ -2760,13 +2760,17 @@ def _project_kv_cache_groups_to_worker(
         ]
         group_spec = group.kv_cache_spec
         if worker_layer_names and isinstance(group_spec, UniformTypeKVCacheSpecs):
+            # volta-ada: spec DEL WORKER (il tipo della cache puo' differire per rango)
             group_spec = UniformTypeKVCacheSpecs(
                 block_size=group_spec.block_size,
                 kv_cache_specs={
-                    layer_name: group_spec.kv_cache_specs[layer_name]
+                    layer_name: worker_spec[layer_name]
                     for layer_name in worker_layer_names
                 },
             )
+        elif worker_layer_names and worker_spec[worker_layer_names[0]] != group_spec:
+            # volta-ada: gruppo a spec singola, ma il worker ha un tipo di cache diverso
+            group_spec = worker_spec[worker_layer_names[0]]
         projected_groups.append(
             KVCacheGroupSpec(
                 worker_layer_names,
@@ -2820,10 +2824,25 @@ def get_kv_cache_configs(
         for layer_name, layer_spec in kv_cache_spec_one_worker.items():
             if layer_name not in merged_kv_cache_specs:
                 merged_kv_cache_specs[layer_name] = layer_spec
-            else:
-                assert merged_kv_cache_specs[layer_name] == layer_spec, (
+            elif merged_kv_cache_specs[layer_name] != layer_spec:
+                # volta-ada: nel tensor parallel misto i ranghi possono avere la cache in tipi diversi
+                # (VOLTA_ADA_SM70_KV_DTYPE): stessa forma, pagina di byte diversa. Si tiene la prima
+                # spec per raggruppare; i conti per worker usano la spec del worker (vedi projection).
+                a, b = merged_kv_cache_specs[layer_name], layer_spec
+                same_shape = (
+                    type(a) is type(b)
+                    and a.block_size == b.block_size
+                    and getattr(a, "num_kv_heads", None) == getattr(b, "num_kv_heads", None)
+                    and getattr(a, "head_size", None) == getattr(b, "head_size", None)
+                )
+                assert same_shape, (
                     "The KV cache specs for the same layer are different "
                     "across workers. This is not supported yet."
+                )
+                logger.info_once(
+                    "volta-ada: KV cache dtype differs across workers for %s (%s vs %s); "
+                    "per-worker page sizes will be used.",
+                    layer_name, getattr(a, "dtype", None), getattr(b, "dtype", None),
                 )
 
     # Get global KV cache groups. This also handles spec unification for

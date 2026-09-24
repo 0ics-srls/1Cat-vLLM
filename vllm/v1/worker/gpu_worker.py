@@ -365,6 +365,20 @@ class Worker(WorkerBase):
 
     @instrument(span_name="Init device")
     def init_device(self):
+        # volta-ada: cache KV con tipo diverso per rango (VOLTA_ADA_SM70_KV_DTYPE=auto|fp8|...):
+        # il rango SM70 usa il tipo indicato, gli altri quello della riga di comando.
+        sm70_kv_dtype = os.environ.get("VOLTA_ADA_SM70_KV_DTYPE")
+        if sm70_kv_dtype and self.device_config.device_type == "cuda":
+            try:
+                cap = torch.cuda.get_device_capability(self.local_rank)
+            except Exception:
+                cap = None
+            if cap == (7, 0) and self.cache_config.cache_dtype != sm70_kv_dtype:
+                logger.info(
+                    "volta-ada: rank %d is SM70, KV cache dtype %s -> %s (other ranks keep %s)",
+                    self.rank, self.cache_config.cache_dtype, sm70_kv_dtype, self.cache_config.cache_dtype,
+                )
+                self.cache_config.cache_dtype = sm70_kv_dtype
         if self.device_config.device_type == "cuda":
             # This env var set by Ray causes exceptions with graph building.
             os.environ.pop("NCCL_ASYNC_ERROR_HANDLING", None)
