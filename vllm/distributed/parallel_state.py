@@ -2563,8 +2563,8 @@ def _install_tp_trace() -> None:
                 if isinstance(a, torch.Tensor):
                     shape = "%s/%s" % (tuple(a.shape), str(a.dtype).replace("torch.", ""))
                     break
-            st = _tb.extract_stack(limit=16)
-            chain = " < ".join("%s:%d" % (f.filename.split("/")[-1], f.lineno) for f in st[:-1][-14:])
+            st = _tb.extract_stack(limit=40)
+            chain = " < ".join("%s:%d" % (f.filename.split("/")[-1], f.lineno) for f in st[:-1][-38:])
             _sys.stderr.write("TPTRACE rank=%s grp=%s n=%d %s %s @ %s\n" % (
                 getattr(self, "rank_in_group", "?"), getattr(self, "unique_name", "?"), counter["n"], name, shape, chain))
             _sys.stderr.flush()
